@@ -21,7 +21,8 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
    ```
 2. Install the required dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install httpx-toolkit
+   pip install subfinder
    ```
 
 ## Usage
@@ -31,16 +32,13 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
    - Copy the webhook URL.
 
 2. **Run the script:**
-   - Open the `config.json` file (if provided) or directly input the webhook URL when prompted.
-   - Start the script:
+   - Start the script using the following command:
      ```bash
-     python subdomain_notifier.py
+     python subdomain_notifier.py -d <domain>
      ```
+     Replace `<domain>` with the website you want to scan for subdomains.
 
-3. **Provide the target website:**
-   - When prompted, enter the website you want to scan for subdomains.
-   
-4. The tool will automatically scan the website every 2 hours and notify the provided Discord webhook of any updates.
+3. The tool will automatically scan the website every 2 hours and notify the provided Discord webhook of any updates.
 
 ## Example Notification
 A typical Discord notification will look like this:
@@ -53,7 +51,7 @@ New subdomains detected for example.com:
 ## Troubleshooting
 - Ensure the webhook URL is correctly set and active.
 - Check your internet connection if the script cannot reach the target website.
-- Ensure Python dependencies are installed using `pip install -r requirements.txt`.
+- Ensure Python dependencies are installed using `pip install httpx-toolkit` and `pip install subfinder`.
 
 ## Contributing
 Feel free to submit issues or pull requests to improve this tool. Contributions are welcome!
