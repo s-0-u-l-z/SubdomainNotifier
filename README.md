@@ -16,8 +16,8 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
 ## Installation
 1. Clone this repository to your local machine:
    ```bash
-   git clone <repository_url>
-   cd <repository_folder>
+   git clone https://github.com/s-0-u-l-z/SubdomainNotifier
+   cd SubdomainNotifier
    ```
 2. Install the required dependencies:
    ```bash
