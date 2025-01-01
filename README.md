@@ -21,8 +21,8 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
    ```
 2. Install the required dependencies:
    ```bash
-   pip install httpx-toolkit
-   pip install subfinder
+   sudo apt install httpx-toolkit
+   sudo apt install subfinder
    ```
 
 ## Usage
