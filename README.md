@@ -11,7 +11,7 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
 ## Prerequisites
 - A Discord server where you can create a webhook.
 - Python installed on your system.
-- Basic knowledge of running Python scripts.
+- Httpx and Subfinder also installed on your system.
 
 ## Installation
 1. Clone this repository to your local machine:
