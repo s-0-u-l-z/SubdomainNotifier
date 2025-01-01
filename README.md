@@ -45,8 +45,7 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
 A typical Discord notification will look like this:
 ```
 New subdomains detected for example.com:
-- sub1.example.com
-- sub2.example.com
+![alt text](https://kindbear123.wordpress.com/wp-content/uploads/2025/01/example.png)
 ```
 
 ## Troubleshooting
