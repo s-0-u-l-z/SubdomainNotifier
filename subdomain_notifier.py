@@ -91,7 +91,7 @@ def main():
 
     temp_dir = "./temp"
     json_file = "subdomains.json"
-    webhook_url = "https://discordapp.com/api/webhooks/1323956253516627999/FHMnjXAT7XSQmd4MTEdGSPslcG6LGSDKYVMjOZjbwM6Y5YTcZVrDUKL5wIP2-Lnt-gYS"
+    webhook_url = "YOUR_DISCORD_WEBHOOK_URL"
 
     os.makedirs(temp_dir, exist_ok=True)
 
