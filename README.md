@@ -42,15 +42,6 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
    
 4. The tool will automatically scan the website every 2 hours and notify the provided Discord webhook of any updates.
 
-## Configuration
-If the script supports a configuration file (e.g., `config.json`), you can pre-set values to avoid inputting them manually:
-```json
-{
-  "webhook_url": "<your_discord_webhook_url>",
-  "scan_interval": 7200
-}
-```
-
 ## Example Notification
 A typical Discord notification will look like this:
 ```
