@@ -46,7 +46,7 @@ A typical Discord notification will look like this:
 
 New subdomains detected for example.com:
 
-![alt text](https://kindbear123.wordpress.com/wp-content/uploads/2025/01/example.png)
+![alt text](https://kindbear123.wordpress.com/wp-content/uploads/2025/01/image_2025-01-01_124421116.png)
 
 
 ## Troubleshooting
