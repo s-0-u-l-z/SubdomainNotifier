@@ -85,13 +85,14 @@ def main():
 
     parser = argparse.ArgumentParser(description="Subdomain Notifier Script")
     parser.add_argument("-d", "--domain", required=True, help="Target domain for subdomain discovery.")
+    parser.add_argument("-wh", "--webhook", required=True, help="Discord webhook URL for notifications.")
     args = parser.parse_args()
 
     target_domain = args.domain
+    webhook_url = args.webhook
 
     temp_dir = "./temp"
     json_file = "subdomains.json"
-    webhook_url = "YOUR_DISCORD_WEBHOOK_URL"
 
     os.makedirs(temp_dir, exist_ok=True)
 
