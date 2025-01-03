@@ -35,9 +35,10 @@ The Subdomain Notifier is a tool that helps monitor subdomains of a given websit
 2. **Run the script:**
    - Start the script using the following command:
      ```bash
-     python subdomain_notifier.py -d <domain>
+     python subdomain_notifier.py -d <domain> -wh <DISCORD_WEBHOOK_URL>
      ```
      Replace `<domain>` with the website you want to scan for subdomains.
+     Replace `<DISCORD_WEBHOOK_URL>` with the discord webhook you made
 
 3. The tool will automatically scan the website every 2 hours and notify the provided Discord webhook of any updates.
 
