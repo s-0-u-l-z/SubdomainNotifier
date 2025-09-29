@@ -5,11 +5,23 @@ import time
 import requests
 from pathlib import Path
 import argparse
-import sys
-import time
+import logging
+from datetime import datetime
+from typing import Set, List
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('subdomain_notifier.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 def display_banner():
-    """Display a cool ASCII banner with a disclaimer, loading line by line."""
+    """Display ASCII banner with disclaimer."""
     banner_lines = [
         r"  ██████  █    ██  ▄▄▄▄    ███▄    █  ▒█████  ▄▄▄█████▓ ██▓  █████▒██▓▓█████  ██▀███  ",
         r"▒██    ▒  ██  ▓██▒▓█████▄  ██ ▀█   █ ▒██▒  ██▒▓  ██▒ ▓▒▓██▒▓██   ▒▓██▒▓█   ▀ ▓██ ▒ ██▒",
@@ -20,129 +32,214 @@ def display_banner():
     ]
     for line in banner_lines:
         print(line)
-        time.sleep(0.1)  # Simulate cool fast-loading text
-
-    # Add flashing red disclaimer
+        time.sleep(0.1)
+    
     disclaimer = "\033[5;31mThe creator of this program is not responsible for any misuse or damage.\033[0m"
-    print(disclaimer)
+    print(f"\n{disclaimer}\n")
 
-def run_subfinder(target, output_file):
-    """Run subfinder for the specified target and save the output to the specified file."""
+def check_dependencies():
+    """Verify required tools are installed."""
+    required_tools = ['subfinder', 'httpx-toolkit']
+    missing = []
+    
+    for tool in required_tools:
+        try:
+            subprocess.run([tool, '-h'], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            missing.append(tool)
+    
+    if missing:
+        logger.error(f"Missing required tools: {', '.join(missing)}")
+        logger.error("Install them before running this script.")
+        return False
+    return True
+
+def run_subfinder(target: str, output_file: str) -> bool:
+    """Run subfinder for the specified target."""
     try:
-        subprocess.run(["subfinder", "-d", target, "-o", output_file], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running subfinder: {e}")
-        raise
-
-def get_available_output_file(base_name, extension=".txt"):
-    """Find an available file name, avoiding conflicts."""
-    counter = 1
-    while True:
-        output_file = f"{base_name}{extension}" if counter == 1 else f"{base_name}{counter}{extension}"
-        if not Path(output_file).exists() or not is_file_in_use(output_file):
-            return output_file
-        counter += 1
-
-def is_file_in_use(file_path):
-    """Check if a file is being used by another process."""
-    try:
-        with open(file_path, "a"):
+        logger.info(f"Running subfinder for {target}...")
+        result = subprocess.run(
+            ["subfinder", "-d", target, "-o", output_file, "-silent"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode != 0:
+            logger.error(f"Subfinder error: {result.stderr}")
             return False
-    except IOError:
+        logger.info(f"Subfinder completed. Output: {output_file}")
         return True
+    except subprocess.TimeoutExpired:
+        logger.error("Subfinder timed out after 5 minutes")
+        return False
+    except Exception as e:
+        logger.error(f"Error running subfinder: {e}")
+        return False
 
-def run_httpx_toolkit(input_file, output_file):
-    """Run httpx-toolkit on the input file and save the alive subdomains to the output file."""
+def run_httpx_toolkit(input_file: str, output_file: str) -> bool:
+    """Run httpx-toolkit on the input file."""
     try:
-        subprocess.run(["httpx-toolkit", "-l", input_file, "-o", output_file], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running httpx-toolkit: {e}")
-        raise
+        logger.info(f"Running httpx-toolkit on {input_file}...")
+        result = subprocess.run(
+            ["httpx-toolkit", "-l", input_file, "-o", output_file, "-silent"],
+            capture_output=True,
+            text=True,
+            timeout=600
+        )
+        if result.returncode != 0:
+            logger.error(f"httpx-toolkit error: {result.stderr}")
+            return False
+        logger.info(f"httpx-toolkit completed. Output: {output_file}")
+        return True
+    except subprocess.TimeoutExpired:
+        logger.error("httpx-toolkit timed out after 10 minutes")
+        return False
+    except Exception as e:
+        logger.error(f"Error running httpx-toolkit: {e}")
+        return False
 
-def send_to_discord(webhook_url, message, file_path=None):
-    """Send a message (and optionally a file) to Discord via webhook."""
-    data = {"content": message}
-    files = {"file": open(file_path, "rb")} if file_path else None
-    headers = {"Content-Type": "application/json"} if not files else {}
+def send_to_discord(webhook_url: str, message: str, file_path: str = None) -> bool:
+    """Send a message and optionally a file to Discord via webhook."""
+    try:
+        if file_path and Path(file_path).exists():
+            with open(file_path, "rb") as f:
+                files = {"file": (Path(file_path).name, f)}
+                data = {"content": message}
+                response = requests.post(webhook_url, data=data, files=files, timeout=30)
+        else:
+            data = {"content": message}
+            response = requests.post(webhook_url, json=data, timeout=30)
+        
+        response.raise_for_status()
+        logger.info(f"Discord notification sent: {message[:50]}...")
+        return True
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to send Discord notification: {e}")
+        return False
 
-    response = requests.post(webhook_url, data=json.dumps(data) if not files else None, files=files, headers=headers)
-    response.raise_for_status()
-
-def load_json(file_path):
-    """Load JSON data from a file. Return an empty list if the file doesn't exist."""
-    if Path(file_path).exists():
-        with open(file_path, "r") as f:
-            return json.load(f)
+def load_json(file_path: str) -> List[str]:
+    """Load JSON data from a file."""
+    try:
+        if Path(file_path).exists():
+            with open(file_path, "r") as f:
+                return json.load(f)
+    except json.JSONDecodeError as e:
+        logger.error(f"Error reading JSON file: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading JSON: {e}")
     return []
 
-def save_json(file_path, data):
+def save_json(file_path: str, data: List[str]) -> bool:
     """Save JSON data to a file."""
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=4)
+    try:
+        with open(file_path, "w") as f:
+            json.dump(data, f, indent=4)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving JSON file: {e}")
+        return False
+
+def read_subdomains(file_path: str) -> Set[str]:
+    """Read subdomains from a file, filtering empty lines."""
+    try:
+        with open(file_path, "r") as f:
+            return {line.strip() for line in f if line.strip()}
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        return set()
 
 def main():
     display_banner()
-
+    
     parser = argparse.ArgumentParser(description="Subdomain Notifier Script")
-    parser.add_argument("-d", "--domain", required=True, help="Target domain for subdomain discovery.")
-    parser.add_argument("-wh", "--webhook", required=True, help="Discord webhook URL for notifications.")
+    parser.add_argument("-d", "--domain", required=True, help="Target domain for subdomain discovery")
+    parser.add_argument("-wh", "--webhook", required=True, help="Discord webhook URL for notifications")
+    parser.add_argument("-i", "--interval", type=int, default=7200, help="Check interval in seconds (default: 7200)")
     args = parser.parse_args()
-
+    
+    if not check_dependencies():
+        return 1
+    
     target_domain = args.domain
     webhook_url = args.webhook
-
-    temp_dir = "./temp"
+    interval = args.interval
+    
+    temp_dir = Path("./temp")
     json_file = "subdomains.json"
-
-    os.makedirs(temp_dir, exist_ok=True)
-
+    
+    temp_dir.mkdir(exist_ok=True)
+    
+    logger.info(f"Starting subdomain monitoring for {target_domain}")
+    logger.info(f"Check interval: {interval} seconds ({interval/3600:.1f} hours)")
+    send_to_discord(webhook_url, f"🚀 Subdomain monitoring started for **{target_domain}**")
+    
+    iteration = 0
     while True:
-        # Define file paths
-        subfinder_output = os.path.join(temp_dir, "subfinder_output.txt")
-        if is_file_in_use(subfinder_output):
-            subfinder_output = get_available_output_file(os.path.join(temp_dir, "subfinder_output"))
-        httpx_output = os.path.join(temp_dir, "alive_subs.txt")
-
+        iteration += 1
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.info(f"=== Iteration {iteration} started at {timestamp} ===")
+        
+        subfinder_output = temp_dir / "subfinder_output.txt"
+        httpx_output = temp_dir / "alive_subs.txt"
+        
         try:
-            # Run subfinder and httpx-toolkit
-            run_subfinder(target_domain, subfinder_output)
-            run_httpx_toolkit(subfinder_output, httpx_output)
-
-            # Load previous subdomains from JSON file
+            # Run subfinder
+            if not run_subfinder(target_domain, str(subfinder_output)):
+                send_to_discord(webhook_url, f"⚠️ Subfinder failed for {target_domain}")
+                logger.warning("Skipping this iteration due to subfinder failure")
+                time.sleep(interval)
+                continue
+            
+            # Run httpx-toolkit
+            if not run_httpx_toolkit(str(subfinder_output), str(httpx_output)):
+                send_to_discord(webhook_url, f"⚠️ httpx-toolkit failed for {target_domain}")
+                logger.warning("Skipping this iteration due to httpx-toolkit failure")
+                time.sleep(interval)
+                continue
+            
+            # Load previous and current subdomains
             previous_subdomains = set(load_json(json_file))
-
-            # Load new subdomains from httpx-toolkit output
-            with open(httpx_output, "r") as f:
-                current_subdomains = set(line.strip() for line in f)
-
+            current_subdomains = read_subdomains(httpx_output)
+            
+            if not current_subdomains:
+                logger.warning("No live subdomains found in current scan")
+            
             # Find new subdomains
             new_subdomains = current_subdomains - previous_subdomains
-
+            
             if new_subdomains:
-                # Notify Discord of new subdomains
-                send_to_discord(webhook_url, f"Found new subdomains for {target_domain}.")
-                new_file_path = os.path.join(temp_dir, "new_subdomains.txt")
+                logger.info(f"Found {len(new_subdomains)} new subdomain(s)")
+                message = f"🎯 Found **{len(new_subdomains)}** new subdomain(s) for **{target_domain}**"
+                send_to_discord(webhook_url, message)
+                
+                # Save and send new subdomains
+                new_file_path = temp_dir / "new_subdomains.txt"
                 with open(new_file_path, "w") as f:
-                    f.write("\n".join(new_subdomains))
-                send_to_discord(webhook_url, "Here is the list of new subdomains:", new_file_path)
-
+                    f.write("\n".join(sorted(new_subdomains)))
+                send_to_discord(webhook_url, "📋 New subdomains list:", str(new_file_path))
+                
                 # Update JSON file
-                all_subdomains = list(previous_subdomains | current_subdomains)
+                all_subdomains = sorted(previous_subdomains | current_subdomains)
                 save_json(json_file, all_subdomains)
             else:
-                # No new subdomains found
-                send_to_discord(webhook_url, "No new subdomains found.")
-
-        except FileNotFoundError as e:
-            # Notify Discord that the JSON file was missing
-            send_to_discord(webhook_url, "No JSON file found. Creating a new one.")
-            save_json(json_file, list(current_subdomains))
+                logger.info("No new subdomains found")
+                send_to_discord(webhook_url, f"✅ No new subdomains for **{target_domain}** (Total: {len(current_subdomains)})")
+            
+            # Clean up temp files
+            for temp_file in [subfinder_output, httpx_output]:
+                if temp_file.exists():
+                    temp_file.unlink()
+        
         except Exception as e:
-            # Notify Discord of any errors
-            send_to_discord(webhook_url, f"An error occurred: {e}")
-
-        # Wait for 2 hours before repeating
-        time.sleep(7200)
+            logger.error(f"Unexpected error in main loop: {e}", exc_info=True)
+            send_to_discord(webhook_url, f"❌ Error occurred: {str(e)[:100]}")
+        
+        logger.info(f"Sleeping for {interval} seconds...")
+        time.sleep(interval)
 
 if __name__ == "__main__":
-    main()
+    try:
+        exit(main())
+    except KeyboardInterrupt:
+        logger.info("\nScript terminated by user")
+        print("\n👋 Script stopped by user")
