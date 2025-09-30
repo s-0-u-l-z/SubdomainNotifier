@@ -39,7 +39,7 @@ def display_banner():
 
 def check_dependencies():
     """Verify required tools are installed."""
-    required_tools = ['subfinder', 'httpx-toolkit']
+    required_tools = ['subfinder', 'httpx']
     missing = []
     
     for tool in required_tools:
@@ -76,26 +76,32 @@ def run_subfinder(target: str, output_file: str) -> bool:
         logger.error(f"Error running subfinder: {e}")
         return False
 
-def run_httpx_toolkit(input_file: str, output_file: str) -> bool:
-    """Run httpx-toolkit on the input file."""
+def run_httpx(input_file: str, output_file: str) -> bool:
+    """Run httpx on the input file."""
     try:
-        logger.info(f"Running httpx-toolkit on {input_file}...")
+        logger.info(f"Running httpx on {input_file}...")
         result = subprocess.run(
-            ["httpx-toolkit", "-l", input_file, "-o", output_file, "-silent"],
+            ["httpx", "-l", input_file, "-o", output_file, "-silent"],
             capture_output=True,
             text=True,
             timeout=600
         )
         if result.returncode != 0:
-            logger.error(f"httpx-toolkit error: {result.stderr}")
+            logger.warning(f"httpx returned non-zero exit code: {result.returncode}")
+            logger.warning(f"httpx stderr: {result.stderr}")
+        
+        # Check if output file exists and has content
+        if Path(output_file).exists() and Path(output_file).stat().st_size > 0:
+            logger.info(f"httpx completed. Output: {output_file}")
+            return True
+        else:
+            logger.warning("httpx produced no output")
             return False
-        logger.info(f"httpx-toolkit completed. Output: {output_file}")
-        return True
     except subprocess.TimeoutExpired:
-        logger.error("httpx-toolkit timed out after 10 minutes")
+        logger.error("httpx timed out after 10 minutes")
         return False
     except Exception as e:
-        logger.error(f"Error running httpx-toolkit: {e}")
+        logger.error(f"Error running httpx: {e}")
         return False
 
 def send_to_discord(webhook_url: str, message: str, file_path: str = None) -> bool:
@@ -190,19 +196,25 @@ def main():
                 time.sleep(interval)
                 continue
             
-            # Run httpx-toolkit
-            if not run_httpx_toolkit(str(subfinder_output), str(httpx_output)):
-                send_to_discord(webhook_url, f"⚠️ httpx-toolkit failed for {target_domain}")
-                logger.warning("Skipping this iteration due to httpx-toolkit failure")
-                time.sleep(interval)
-                continue
+            # Run httpx with fallback to subfinder output
+            httpx_success = run_httpx(str(subfinder_output), str(httpx_output))
             
-            # Load previous and current subdomains
+            if httpx_success:
+                # Use httpx output (live subdomains)
+                current_subdomains = read_subdomains(httpx_output)
+                logger.info(f"Using httpx results: {len(current_subdomains)} live subdomains")
+            else:
+                # Fallback to subfinder output
+                logger.warning("httpx failed or produced no output, using subfinder results as fallback")
+                send_to_discord(webhook_url, f"⚠️ httpx failed for {target_domain}, using all discovered subdomains")
+                current_subdomains = read_subdomains(subfinder_output)
+                logger.info(f"Using subfinder results: {len(current_subdomains)} total subdomains")
+            
+            # Load previous subdomains
             previous_subdomains = set(load_json(json_file))
-            current_subdomains = read_subdomains(httpx_output)
             
             if not current_subdomains:
-                logger.warning("No live subdomains found in current scan")
+                logger.warning("No subdomains found in current scan")
             
             # Find new subdomains
             new_subdomains = current_subdomains - previous_subdomains
